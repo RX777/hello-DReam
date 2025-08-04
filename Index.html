@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base target="_top">
+    <title>好棧AI智慧買房家</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', 'Noto Sans TC', sans-serif; background-color: #f8fafc; }
+        .form-section { background-color: white; padding: 2rem; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); margin-bottom: 1.5rem; }
+        .report-section { background-color: #ffffff; padding: 2rem; border-radius: 0.75rem; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+        .form-label { font-weight: 500; color: #374151; margin-bottom: 0.5rem; display: block; }
+        .form-input, .form-select { width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.5rem; transition: border-color 0.2s, box-shadow 0.2s; }
+        .form-input:focus, .form-select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px #bfdbfe; }
+        .form-checkbox { margin-right: 0.5rem; accent-color: #3b82f6; }
+        .hidden { display: none; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
+        .modal-content { background-color: white; padding: 2rem; border-radius: 0.75rem; width: 90%; max-width: 600px; }
+        .error-message { color: #991b1b; font-size: 0.875rem; margin-top: 0.25rem; }
+        .slider { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; background: #d1d5db; border-radius: 5px; outline: none; opacity: 0.7; transition: opacity .2s; }
+        .slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; background: #4f46e5; border-radius: 50%; cursor: pointer; }
+        .slider::-moz-range-thumb { width: 20px; height: 20px; background: #4f46e5; border-radius: 50%; cursor: pointer; }
+        @media print {
+            .pdf-no-break { page-break-inside: avoid; }
+            .pdf-page-break-before { page-break-before: always; }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-7xl mx-auto">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div id="form-container">
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">好棧AI智慧買房家</h1>
+                <p class="text-gray-600 mb-8">請在下方輸入您的財務狀況，完成後產出您的專屬購屋定位與戰略報告書。</p>
+                <div class="form-section">
+                    <h2 class="text-xl font-bold mb-4 border-b pb-2">基本資料 (選填)</h2>
+                    <div id="basic-info-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                </div>
+                <div class="form-section">
+                    <h2 class="text-xl font-bold mb-4 border-b pb-2">第一部分：資產活化評估</h2>
+                    <div id="asset-section-content"></div>
+                </div>
+                <div id="other-assets-section" class="hidden"></div>
+                <div class="form-section">
+                    <h2 class="text-xl font-bold mb-4 border-b pb-2">第二部分：負債降壓分析</h2>
+                    <div>
+                        <label class="form-label">您目前有哪些類型的負債？ (可複選)</label>
+                        <div id="debt-checkbox-container" class="space-y-2"></div>
+                    </div>
+                    <button type="button" onclick="DebtCalculator.open()" class="w-full mt-4 bg-purple-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-purple-700 transition">開啟債務整合模擬計算機</button>
+                </div>
+                <div id="debt-details-sections"></div>
+                
+                <div id="remaining-form-sections"></div>
+
+                <div class="mt-8">
+                    <button id="generate-report-btn" onclick="App.calculate()" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition text-lg">
+                        <span id="btn-text">生成我的買房戰力報告</span>
+                        <span id="btn-spinner" class="hidden">分析中...</span>
+                    </button>
+                    <button type="button" onclick="Accelerator.open()" class="w-full mt-4 bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition text-lg">開啟購屋加速器模擬計算機</button>
+                    <p id="form-error" class="error-message hidden mt-2 text-center"></p>
+                </div>
+            </div>
+            
+            <div id="report-wrapper" class="hidden"></div>
+        </div>
+    </div>
+
+    <div id="expense-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h2 class="text-xl font-bold mb-4">詳細計算每月生活支出</h2>
+            <div id="expense-modal-inputs" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto p-2"></div>
+            <div class="mt-6 flex justify-end space-x-4">
+                <button type="button" onclick="UI.closeExpenseModal()" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">取消</button>
+                <button type="button" onclick="UI.confirmExpenses()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">確認送出</button>
+            </div>
+        </div>
+    </div>
+    <div id="debt-calculator-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h2 class="text-xl font-bold mb-4">債務整合模擬計算機</h2>
+            <div class="max-h-[70vh] overflow-y-auto p-2">
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-2 border-b pb-1">目前債務狀況</h3>
+                    <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead class="text-xs text-gray-700 uppercase bg-gray-50"><tr><th scope="col" class="px-4 py-2">債務類型</th><th scope="col" class="px-4 py-2">剩餘本金(萬)</th><th scope="col" class="px-4 py-2">利率(%)</th><th scope="col" class="px-4 py-2">預估年利息</th></tr></thead><tbody id="debt-calculator-table-body"></tbody><tfoot class="font-semibold text-gray-900"><tr><td class="px-4 py-2">總計</td><td class="px-4 py-2" id="debt-total-principal">0</td><td class="px-4 py-2">-</td><td class="px-4 py-2" id="debt-total-annual-interest">0</td></tr></tfoot></table></div>
+                </div>
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-2 border-b pb-1">整合方案模擬</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div><label for="sim-loan-amount" class="form-label text-sm">整合後貸款金額(元)</label><input type="number" id="sim-loan-amount" class="form-input" value="0"></div>
+                        <div><label for="sim-interest-rate" class="form-label text-sm">整合後利率(%)</label><input type="number" id="sim-interest-rate" class="form-input" placeholder="例如: 2.5"></div>
+                        <div><label for="sim-loan-term" class="form-label text-sm">還款年限(年)</label><input type="number" id="sim-loan-term" class="form-input" placeholder="例如: 7"></div>
+                    </div>
+                </div>
+                <div class="mb-4 p-4 bg-blue-50 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-2 text-blue-800">模擬結果</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-center">
+                        <div><p class="text-sm text-gray-600">整合後預估月付金</p><p id="sim-new-payment" class="text-2xl font-bold text-blue-700">NT$ 0</p></div>
+                        <div class="bg-green-100 p-2 rounded"><p class="text-sm text-green-800">每年預計可節省利息</p><p id="sim-interest-savings" class="text-2xl font-bold text-green-700">NT$ 0</p></div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end space-x-4">
+                <button type="button" onclick="DebtCalculator.close()" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">關閉</button>
+                <button type="button" onclick="DebtCalculator.calculateSimulation()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">開始計算</button>
+            </div>
+        </div>
+    </div>
+    <div id="accelerator-modal" class="modal-overlay hidden">
+    <div class="modal-content" style="max-width: 800px;">
+        <h2 class="text-2xl font-bold text-gray-800 mb-2">購屋加速器模擬計算機 v2.0</h2>
+        <p class="text-gray-600 mb-6">模擬透過三大策略「提升收入、還清債務、精明購買」，能為您縮短多少買房時間。</p>
+        
+        <div class="max-h-[70vh] overflow-y-auto pr-2">
+            <div class="mb-6 p-4 border rounded-lg bg-gray-50">
+                <h3 class="text-lg font-semibold mb-3 border-b pb-2">財務現況基準</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                    <div>
+                        <p class="text-sm text-gray-500">頭期款缺口</p>
+                        <p id="accel-original-downpayment" class="text-xl font-semibold text-gray-800">NT$ 0</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">目前每月可儲蓄</p>
+                        <p id="accel-original-savings" class="text-xl font-semibold text-green-600">NT$ 0</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">原預計達標時間</p>
+                        <p id="accel-original-time" class="text-xl font-semibold text-red-600">--</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6 p-4 border rounded-lg">
+                <h3 class="text-lg font-semibold mb-3 border-b pb-2">三大加速策略模擬</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+                    <div>
+                        <label class="form-label font-bold" for="accel-target-income">策略一：提升收入</label>
+                        <input type="number" id="accel-target-income" class="form-input text-lg" oninput="Accelerator.update()">
+                        <p class="text-xs text-gray-500 mt-1">請輸入您未來的目標月收入。</p>
+                    </div>
+                    <div>
+                        <label class="form-label font-bold">策略二：加速還債</label>
+                        <label class="flex items-center mt-2 p-3 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200">
+                            <input type="checkbox" id="accel-debt-cleared" class="form-checkbox h-5 w-5" onchange="Accelerator.update()">
+                            <span class="ml-3 text-gray-700">模擬還清所有非房貸債務</span>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="form-label font-bold" for="accel-price-reduction">策略三：精明購買</label>
+                        <div class="relative">
+                            <input type="number" id="accel-price-reduction" class="form-input text-lg pr-8" value="0" oninput="Accelerator.update()">
+                            <span class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500">%</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">預計可將目標總價降低多少 %。</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 bg-indigo-50 rounded-lg">
+                <h3 class="text-lg font-semibold mb-3 border-b border-indigo-200 pb-2 text-indigo-900">模擬加速結果</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+                    <div>
+                        <h4 class="font-semibold mb-2">加速後月存款</h4>
+                        <p class="text-2xl font-bold text-green-700 mt-1" id="accel-new-savings">NT$ 0</p>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold mb-2">加速後達標時間</h4>
+                        <p class="text-2xl font-bold text-indigo-800 mt-1" id="accel-new-time">--</p>
+                    </div>
+                    <div class="bg-green-100 p-2 rounded-lg">
+                        <h4 class="font-semibold mb-2 text-green-800">🔥 總共縮短時間</h4>
+                        <p class="text-2xl font-bold text-green-700 mt-1" id="accel-time-shortened">--</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="mt-6 flex justify-end">
+            <button type="button" onclick="Accelerator.close()" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">關閉</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ===================================================================================
+//  I. 前端應用程式主邏輯 (Frontend App Logic)
+// ===================================================================================
+const App = {
+    CONFIG: {},
+    init(configFromServer) {
+        this.CONFIG = configFromServer;
+        FormGenerator.init();
+        const reportDateEl = DOMUtils.get('report-date');
+        if (reportDateEl) {
+            reportDateEl.value = new Date().toISOString().split('T')[0];
+        }
+    },
+    calculate() {
+        UI.showLoading(true);
+        UI.hideError();
+        const formData = FormGenerator.collectFormData();
+        if (!formData['main-income'] || !formData['house-goal-price']) {
+            UI.showError('請至少填寫「每月主要收入」和「理想購屋總價」。');
+            UI.showLoading(false);
+            return;
+        }
+        google.script.run
+            .withSuccessHandler(response => {
+                if (response.success) {
+                    const { scores, financials, reports } = response.data;
+                    UI.updateTextReports(reports);
+                    UI.updateFinalScore(scores);
+                    ChartManager.updateAllCharts(scores, financials);
+                    UI.showReport();
+                } else {
+                    UI.showError(response.error);
+                }
+                UI.showLoading(false);
+            })
+            .withFailureHandler(error => {
+                UI.showError(`與伺服器通訊失敗: ${error.message}`);
+                UI.showLoading(false);
+            })
+            .analyzeBuyingPower(formData);
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        const configFromServer = <?!= CONFIG_FROM_SERVER ?>;
+        App.init(configFromServer);
+    } catch (e) {
+        document.body.innerHTML = `<div class="p-4 text-red-700 bg-red-100">頁面初始化失敗: ${e.message}</div>`;
+    }
+});
+
+// ===================================================================================
+//  II. 前端模組 (Frontend Modules)
+// ===================================================================================
+const DOMUtils = {
+    get: (id) => document.getElementById(id),
+    getValue: (id) => DOMUtils.get(id)?.value || '',
+    getSelectValue: (id) => DOMUtils.get(id)?.value || '',
+    isChecked: (id) => DOMUtils.get(id)?.checked || false,
+    setText: (id, text) => { const el = DOMUtils.get(id); if (el) el.textContent = text; },
+    setHTML: (id, html) => { const el = DOMUtils.get(id); if (el) el.innerHTML = html; },
+    toggleClass: (id, className, condition) => { const el = DOMUtils.get(id); if (el) el.classList.toggle(className, condition); },
+};
+
+const FormGenerator = {
+    init() {
+        this.generateAllSections();
+    },
+    generateAllSections() {
+        const basicInfoContainer = DOMUtils.get('basic-info-grid');
+        if (basicInfoContainer) {
+            const fields = [
+                { id: 'user-name', label: '您的姓名', type: 'text', placeholder: '例如：陳大明' },
+                { id: 'report-date', label: '報告日期', type: 'date' },
+                { id: 'age-range', label: '年齡區間', type: 'select', options: ['請選擇', '25-30歲', '31-35歲', '36-40歲', '41歲以上'], values: ['none', '25-30', '31-35', '36-40', '41+'] },
+                { id: 'industry', label: '產業類別', type: 'select', options: ['請選擇', '科技業', '金融業', '醫療業', '傳統產業', '服務業', '其他'], values: ['none', 'tech', 'finance', 'medical', 'traditional', 'service', 'other'] }
+            ];
+            basicInfoContainer.innerHTML = fields.map(f => this.createField(f)).join('');
+        }
+        const assetContainer = DOMUtils.get('asset-section-content');
+        if (assetContainer) {
+            assetContainer.innerHTML = `<div><label class="form-label" for="main-income">每月主要「稅後」穩定收入</label><input class="form-input" type="number" id="main-income" placeholder="例如：80000" min="0"></div><div class="mt-4"><label class="form-label">除了主要收入，是否有其他資產或非固定性收入？</label><select class="form-select" id="has-other-assets" onchange="UI.toggleSections()"><option value="no">否</option><option value="yes">是</option></select></div>`;
+        }
+        const otherAssetsContainer = DOMUtils.get('other-assets-section');
+        if (otherAssetsContainer) {
+            otherAssetsContainer.innerHTML = `<div class="form-section"><h3 class="text-lg font-semibold mb-4">A. 現金與投資組合</h3><input class="form-input mb-2" type="number" id="cash-assets" placeholder="台幣現金與活存總額 (萬)" min="0"><input class="form-input mb-2" type="number" id="stock-assets" placeholder="股票/ETF總市值 (萬)" min="0"></div><div class="form-section"><h3 class="text-lg font-semibold mb-4">B. 不動產與其他資產</h3><div class="mb-4"><label class="form-label" for="owned-properties">您目前名下持有幾間房產？</label><select id="owned-properties" class="form-select"><option value="0">0 間</option><option value="1">1 間</option><option value="2">2 間</option><option value="3">3 間或以上</option></select></div><input class="form-input mb-2" type="number" id="property-assets" placeholder="持有房產預估總值 (萬)" min="0"><input class="form-input" type="number" id="other-valuable-assets" placeholder="黃金/貴金屬等預估總值 (萬)" min="0"></div><div class="form-section"><h3 class="text-lg font-semibold mb-4">C. 其他收入</h3><input class="form-input" type="number" id="other-income" placeholder="平均每月非固定性收入" min="0"></div>`;
+        }
+        const debtCheckboxContainer = DOMUtils.get('debt-checkbox-container');
+        const debtDetailsContainer = DOMUtils.get('debt-details-sections');
+        if (debtCheckboxContainer && debtDetailsContainer) {
+            debtCheckboxContainer.innerHTML = App.CONFIG.debtTypes.map(d => `<label class="flex items-center"><input type="checkbox" id="has-${d.id}" class="form-checkbox" onchange="UI.toggleSections()">${d.name}</label>`).join('');
+            debtDetailsContainer.innerHTML = App.CONFIG.debtTypes.map(d => `<div id="${d.id}-section" class="hidden form-section"><h3 class="text-lg font-semibold mb-4">${d.name}詳情</h3>${d.fields.map(f => `<input class="form-input mb-2" type="${f.type}" id="${d.id}-${f.id}" placeholder="${f.placeholder}" min="0">`).join('')}</div>`).join('');
+        }
+        const remainingContainer = DOMUtils.get('remaining-form-sections');
+        if (remainingContainer) {
+            const sections = [
+                { isHtml: true, content: `<div class="form-section"><h3 class="text-lg font-semibold mb-4">生活支出</h3><input class="form-input hidden" type="number" id="living-expenses" min="0" value="0"><button type="button" onclick="UI.openExpenseModal()" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition">詳細計算每月生活支出</button><p id="total-expense-display" class="text-center mt-2 text-gray-600">總計：NT$ 0</p></div>`},
+                { title: '第三部分：目標設定', content: this.createField({id: 'house-goal-price', placeholder: '理想購屋總價目標 (萬)', type: 'number'}) + this.createField({id: 'house-goal-location', placeholder: '預計購屋地點', type: 'text'}) },
+                { title: '第四部分：銀行視角與財務紀律', content: this.createField({id: 'job-type', label: '職業穩定性', type: 'select', options:['大型上市櫃公司 / 公教 / 國營事業', '中小企業 (有薪轉勞保)', '自營業者 / 現金收入者'], values:['stable', 'sme', 'cash-based']}) + this.createField({id: 'credit-score', label: '聯徵信用分數', type: 'select', options:['750分以上 (優良)', '650-749分 (正常)', '650分以下 (待加強)'], values:['excellent', 'good', 'fair']}) + this.createField({id: 'saving-habit', label: '主要往來銀行帳戶狀態？', type: 'select', options:['每月有穩定且持續增長的餘額 (優等生)', '帳戶常有大筆資金進出，但月底餘額不高 (過路財神)', '薪水入帳後很快歸零 (月光族)', '信用小白 (無信用卡或貸款紀錄)'], values:['stable', 'breakeven', 'moonlight', 'newbie']}) + this.createField({id: 'emergency-fund', label: '您的「緊急預備金」？', type: 'select', options:['有，涵蓋6個月以上', '有，涵蓋3-6個月', '有，涵蓋1-3個月', '無緊急預備金'], values:['over-6', '3-to-6', '1-to-3', 'none']}) },
+                { title: '第五部分：市場洞察力評估', content: this.createField({id: 'buying-experience', label: '您過去是否有成功購買房產經驗？', type: 'select', options:['否，我是首購族', '否，但因繼承/贈與而持有房產', '是，我曾有實際購屋經驗'], values:['no', 'no_but_own', 'yes'], onchange: 'UI.toggleExperienceSections()'}) + `<div id="novice-section"><div class="mb-4"><label class="form-label">您為買房做了哪些準備？ (可複選)</label><div class="space-y-2">`+ this.createField({id:'prep-reading', label:'閱讀房產書籍/課程', type:'checkbox'}) + this.createField({id:'prep-viewing', label:'近期看房超過5間', type:'checkbox'}) + this.createField({id:'prep-research', label:'研究實價登錄', type:'checkbox'}) + `</div></div></div>` + `<div id="experienced-section" class="hidden"><div class="mb-4">` + this.createField({id: 'experience-outcome', label: '您上次的購屋成果如何？', type: 'select', options:['資產明顯增值，且買在相對低點', '資產持平，買在當時的合理行情', '目前資產價值低於當初購入成本'], values:['profit', 'even', 'loss']}) + `</div></div>` + this.createField({id: 'object-cons', label: '您是否能說出目標物件至少三個明確的「抗性」？', type: 'select', options:['是，可以清楚說明', '大概知道，但說不清楚', '否，我覺得它很完美'], values:['yes', 'maybe', 'no']}) },
+                { title: '第六部分：支援系統評估', content: this.createField({id: 'decision-support', label: '您的「決策智囊團」中，是否包含客觀第三方？', type: 'select', options:['是，有專業的第三方顧問', '否，主要是與親友討論', '無，我習慣自己做研究與決策'], values:['expert', 'friends', 'self']}) + this.createField({id: 'family-support', label: '您的直系親屬背景，是否有潛在加分項？', type: 'select', options:['無，家境普通，主要靠自己打拼', '家中經營穩定且有獲利的事業', '長輩名下擁有多筆無貸款的不動產', '家人為高收入的專業人士'], values:['none', 'business', 'property', 'professional']}) }
+            ];
+            remainingContainer.innerHTML = sections.map(sec => {
+                if (sec.isHtml) return sec.content;
+                return `<div class="form-section"><h2 class="text-xl font-bold mb-4 border-b pb-2">${sec.title}</h2>${sec.content}</div>`;
+            }).join('');
+        }
+        this.generateExpenseModalInputs();
+    },
+    generateExpenseModalInputs() {
+        const fields = ['餐飲費用', '交通費用', '租金費用', '父母孝親費', '保險支出', '雜支(電信/水電/瓦斯)', '個人娛樂消費', '日常用品', '預估所得稅月攤提', '其他支出'];
+        const container = DOMUtils.get('expense-modal-inputs');
+        if (container) {
+            container.innerHTML = fields.map((f, i) => `<div><input class="form-input" type="number" id="exp-${i}" placeholder="${f}" min="0"></div>`).join('');
+        }
+    },
+    createField({ id, label, type, placeholder, options, values, onchange }) {
+        const labelHtml = label ? `<label class="form-label" for="${id}">${label}</label>` : '';
+        let fieldHtml = '';
+        if (type === 'select') {
+            const optionsHtml = options.map((opt, i) => `<option value="${(values ? values[i] : opt)}">${opt}</option>`).join('');
+            fieldHtml = `<select id="${id}" class="form-select" ${onchange ? `onchange="${onchange}"` : ''}>${optionsHtml}</select>`;
+        } else if (type === 'checkbox') {
+            return `<label class="flex items-center"><input type="checkbox" id="${id}" class="form-checkbox"> ${label}</label>`;
+        } else {
+            fieldHtml = `<input class="form-input mb-2" type="${type}" id="${id}" placeholder="${placeholder || ''}">`;
+        }
+        return `<div class="mb-4">${labelHtml}${fieldHtml}</div>`;
+    },
+    collectFormData() {
+        const formData = {};
+        const inputs = document.querySelectorAll('#form-container input, #form-container select');
+        inputs.forEach(input => {
+            if (input.type === 'checkbox') {
+                formData[input.id] = input.checked;
+            } else if (input.type === 'number') {
+                formData[input.id] = parseFloat(input.value) || 0;
+            } else {
+                formData[input.id] = input.value;
+            }
+        });
+        return formData;
+    }
+};
+
+// 🔥 新增：人格定位的內容清單 (Slogan + 圖片網址)
+const PERSONALITY_CONTENT = {
+    'FORTRESS': { slogan: '真正賀鴨', imageUrl: 'https://i.meee.com.tw/U0jE8hV.png' },
+    'LEVERAGED_MAGNATE': { slogan: '很會借鴨', imageUrl: 'https://i.meee.com.tw/rBWoy4W.png' },
+    'ASSET_FROZEN': { slogan: '資產凍結鴨', imageUrl: 'https://i.meee.com.tw/wQWlhso.png' },
+    'HIGH_INCOME_SPENDER': { slogan: '大手大腳鴨', imageUrl: 'https://i.meee.com.tw/41CHy8P.png' },
+    'PRUDENT_ACCUMULATOR': { slogan: '很會存錢鴨', imageUrl: 'https://i.meee.com.tw/8tbuF5Q.png' },
+    'CONSERVATIVE_IRON_BOWL': { slogan: '鋼鐵飯碗鴨', imageUrl: 'https://i.meee.com.tw/zsrNdjn.png' },
+    'STRATEGIST': { slogan: '很多方法鴨', imageUrl: 'https://i.meee.com.tw/txkP7TT.png' },
+    'FAMILY_FUNDED': { slogan: '家裡有礦鴨', imageUrl: 'https://i.meee.com.tw/INryKQB.png' },
+    'CREDIT_NEWBIE': { slogan: '信用小白鴨', imageUrl: 'https://i.meee.com.tw/dre1FKb.png' },
+    'GIG_ECONOMY_DREAMER': { slogan: '斜槓很多鴨', imageUrl: 'https://i.meee.com.tw/O4RHvLY.png' },
+    'PRECARIOUS_BEGINNER': { slogan: '有買房夢鴨', imageUrl: 'https://i.meee.com.tw/91rDdCL.png' },
+    'DEFAULT': { slogan: '中規中矩鴨', imageUrl: 'https://i.meee.com.tw/18tg3Wo.png' }
+};
+
+const UI = {
+    showLoading(isLoading) {
+        DOMUtils.get('btn-text').classList.toggle('hidden', isLoading);
+        DOMUtils.get('btn-spinner').classList.toggle('hidden', !isLoading);
+        const btn = DOMUtils.get('generate-report-btn');
+        if(btn) btn.disabled = isLoading;
+    },
+    showError(message) {
+        const errorEl = DOMUtils.get('form-error');
+        if (errorEl) { errorEl.textContent = message; errorEl.classList.remove('hidden'); }
+    },
+    hideError() {
+        const errorEl = DOMUtils.get('form-error');
+        if (errorEl) errorEl.classList.add('hidden');
+    },
+    showReport() {
+        const reportWrapper = DOMUtils.get('report-wrapper');
+        if (reportWrapper) {
+            reportWrapper.classList.remove('hidden');
+            reportWrapper.scrollIntoView({ behavior: 'smooth' });
+        }
+    },
+    updateTextReports(reports) {
+        const reportContainer = DOMUtils.get('report-wrapper');
+        if(reportContainer) reportContainer.innerHTML = `<div id="report-section" class="report-section">${this.getReportHtml(reports)}</div>`;
+    },
+    getReportHtml(reports) {
+        // 🔥 修改：根據人格類型，從上方清單中取得圖片和Slogan
+        const personalityType = reports.personalityType; // e.g. 'FORTRESS'
+        const content = PERSONALITY_CONTENT[personalityType];
+        let personalityHtml = '';
+        if (content) {
+            personalityHtml = `
+                <div class="my-6 text-center pdf-no-break">
+                    <img src="${content.imageUrl}" alt="${content.slogan}" class="w-full max-w-xs mx-auto rounded-lg shadow-lg mb-4">
+                    <h3 class="text-2xl font-bold text-indigo-700">${content.slogan}</h3>
+                </div>
+            `;
+        }
+
+        return `<div class="pdf-no-break">
+                    <div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold text-gray-800">您的買房戰力分析報告</h2><button id="download-pdf-btn" onclick="ChartManager.downloadPDF()" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-800 transition text-sm">下載 PDF</button></div>
+                    <div class="flex justify-between text-sm text-gray-500 mb-4 border-b pb-2"><span>姓名：<span>${DOMUtils.getValue('user-name') || 'N/A'}</span></span><span>報告日期：<span>${DOMUtils.getValue('report-date')}</span></span></div>
+                    ${reports.snapshot}${reports.macro}${reports.warnings}
+                    <div class="text-center mb-6"><p class="text-gray-600">距離買房總體評分</p><p id="final-score" class="text-6xl font-bold text-blue-700">0</p><p id="final-score-text" class="text-gray-500 mt-1"></p></div>
+                    <div class="mb-6"><h3 class="text-lg font-semibold text-gray-800 mb-2">綜合戰力六角圖</h3><div class="max-w-sm mx-auto"><canvas id="radar-chart"></canvas></div></div>
+                </div>
+                <div class="pdf-page-break-before">
+                    ${reports.summary}<hr class="my-6">
+                    <div class="mb-6 pdf-no-break"><h3 class="text-lg font-semibold text-gray-800 mb-2">視覺化故事圖表</h3><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="pdf-no-break"><h4 class="text-center font-medium text-gray-700 mb-2">資產結構</h4><canvas id="asset-chart"></canvas></div><div class="pdf-no-break"><h4 class="text-center font-medium text-gray-700 mb-2">每月現金流</h4><canvas id="cashflow-chart"></canvas></div><div id="expense-chart-container" class="md:col-span-2 pdf-no-break hidden"><h4 class="text-center font-medium text-gray-700 mb-2">每月生活支出分佈</h4><div class="max-w-xs mx-auto"><canvas id="expense-chart"></canvas></div></div></div></div>
+                    <div class="mb-6 pdf-no-break">${reports.swot}</div>
+                    <div class="mb-6 pdf-no-break">${reports.plan}</div>
+                    <div class="mb-6">${reports.recommendations}</div>
+                    
+                    ${personalityHtml} 
+                    <div class="mb-6 pdf-no-break">${reports.personalityExplanation}</div>
+
+                    <div class="mb-6 pdf-no-break">${reports.weightsExplanation}</div>
+                    <div class="mb-6 pdf-no-break">${reports.disclaimer}</div>
+                </div>`;
+    },
+    updateFinalScore(scores) {
+      const weights = App.CONFIG.scoringWeights.final;
+      const finalScore = Object.keys(weights).reduce((sum, key) => sum + (scores[key] * weights[key]), 0);
+      DOMUtils.setText('final-score', Math.round(finalScore));
+      let scoreText = '';
+      let color = '#374151';
+      if (finalScore >= 85) { scoreText = '條件頂尖，應把握機會果斷出手。'; color = '#166534'; } 
+      else if (finalScore >= 70) { scoreText = '體質良好，但部分弱點可能成為談判或貸款的阻礙。'; color = '#ca8a04'; } 
+      else if (finalScore >= 50) { scoreText = '存在明顯短版，若不改善，貿然進場風險極高。'; color = '#d97706'; } 
+      else { scoreText = '基本功嚴重不足，目前不建議進場看房。'; color = '#991b1b'; }
+      DOMUtils.setText('final-score-text', scoreText);
+      const scoreTextEl = DOMUtils.get('final-score-text');
+      if (scoreTextEl) scoreTextEl.style.color = color;
+    },
+    openExpenseModal: () => DOMUtils.toggleClass('expense-modal', 'hidden', false),
+    closeExpenseModal: () => DOMUtils.toggleClass('expense-modal', 'hidden', true),
+    confirmExpenses() {
+        const inputs = document.querySelectorAll('#expense-modal-inputs input');
+        let total = 0;
+        inputs.forEach(input => { total += parseFloat(input.value) || 0; });
+        DOMUtils.get('living-expenses').value = total;
+        DOMUtils.setText('total-expense-display', `總計：NT$ ${total.toLocaleString()}`);
+        this.closeExpenseModal();
+    },
+    toggleSections() {
+        DOMUtils.toggleClass('other-assets-section', 'hidden', DOMUtils.getValue('has-other-assets') !== 'yes');
+        App.CONFIG.debtTypes.forEach(debt => {
+            DOMUtils.toggleClass(`${debt.id}-section`, 'hidden', !DOMUtils.isChecked(`has-${debt.id}`));
+        });
+    },
+    toggleExperienceSections() {
+        const experience = DOMUtils.getValue('buying-experience') === 'yes';
+        DOMUtils.toggleClass('novice-section', 'hidden', experience);
+        DOMUtils.toggleClass('experienced-section', 'hidden', !experience);
+    },
+};
+
+const ChartManager = {
+    charts: {},
+    updateAllCharts(scores, financials) {
+        this.updateRadarChart(scores);
+        this.updateAssetChart(financials);
+        this.updateCashflowChart(financials);
+        const expenseDetails = {};
+        document.querySelectorAll('#expense-modal-inputs input').forEach(input => {
+            const value = parseFloat(input.value) || 0;
+            if(value > 0) expenseDetails[input.placeholder] = value;
+        });
+        this.updateExpenseChart(expenseDetails);
+    },
+    createChart(canvasId, type, config) {
+        const element = DOMUtils.get(canvasId);
+        if (!element) return;
+        const ctx = element.getContext('2d');
+        if (this.charts[canvasId]) this.charts[canvasId].destroy();
+        this.charts[canvasId] = new Chart(ctx, { type, data: config.data, options: config.options });
+    },
+    updateRadarChart(scores) {
+        const data = {
+            labels: ['頭期款實力', '財務健康度', '現金流穩定性', '銀行信用條件', '市場洞察力', '支援系統'],
+            datasets: [{ label: '個人買房戰力', data: Object.values(scores), fill: true, backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: 'rgb(59, 130, 246)' }]
+        };
+        this.createChart('radar-chart', 'radar', { data, options: { scales: { r: { suggestedMin: 0, suggestedMax: 100 } } } });
+    },
+    updateAssetChart(financials) {
+        const { cashAssets, stockAssets, propertyAssets } = financials;
+        const data = {
+            labels: ['現金', '投資', '不動產'],
+            datasets: [{ data: [cashAssets, stockAssets, propertyAssets], backgroundColor: ['#3b82f6', '#10b981', '#f59e0b'] }]
+        };
+        this.createChart('asset-chart', 'doughnut', { data, options: { plugins: { legend: { position: 'bottom' } } } });
+    },
+    updateCashflowChart(financials) {
+        const { totalIncome, livingExpenses, totalDebtPayment } = financials;
+        const net = totalIncome - livingExpenses - totalDebtPayment;
+        const data = {
+            labels: ['總收入', '生活支出', '總債務月付', '淨現金流'],
+            datasets: [{ data: [totalIncome, -livingExpenses, -totalDebtPayment, net], backgroundColor: ['#22c55e', '#f97316', '#ef4444', net >= 0 ? '#3b82f6' : '#991b1b'] }]
+        };
+        this.createChart('cashflow-chart', 'bar', { data, options: { indexAxis: 'y', plugins: { legend: { display: false } } } });
+    },
+    updateExpenseChart(expenseDetails) {
+        const container = DOMUtils.get('expense-chart-container');
+        if (!container) return;
+        const hasExpenses = expenseDetails && Object.keys(expenseDetails).length > 0;
+        DOMUtils.toggleClass('expense-chart-container', 'hidden', !hasExpenses);
+        if (!hasExpenses) return;
+        const data = {
+            labels: Object.keys(expenseDetails),
+            datasets: [{ data: Object.values(expenseDetails), backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9'] }]
+        };
+        this.createChart('expense-chart', 'doughnut', { data, options: { plugins: { legend: { position: 'bottom' } } } });
+    },
+    downloadPDF() {
+        const reportElement = DOMUtils.get('report-section');
+        if (reportElement) {
+            const opt = { margin: 0.5, filename: '買房戰力分析報告.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }};
+            html2pdf().set(opt).from(reportElement).save();
+        }
+    }
+};
+
+const DebtCalculator = {
+    originalTotalAnnualInterest: 0,
+    open: () => {
+        let totalPrincipal = 0, totalAnnualInterest = 0;
+        const tableBody = DOMUtils.get('debt-calculator-table-body');
+        if(!tableBody) return;
+        tableBody.innerHTML = '';
+        const formData = FormGenerator.collectFormData();
+        App.CONFIG.debtTypes.forEach(debt => {
+            if (formData[`has-${debt.id}`]) {
+                const principal = (formData[`${debt.id}-total`] || 0) * 10000;
+                const rate = formData[`${debt.id}-rate`] || 0;
+                if (principal > 0 && rate > 0) {
+                    const annualInterest = principal * (rate / 100);
+                    totalPrincipal += principal;
+                    totalAnnualInterest += annualInterest;
+                    tableBody.innerHTML += `<tr><td class="px-4 py-2">${debt.name}</td><td class="px-4 py-2">${(principal/10000).toLocaleString()}</td><td class="px-4 py-2">${rate.toLocaleString()}%</td><td class="px-4 py-2">${Math.round(annualInterest).toLocaleString()}</td></tr>`;
+                }
+            }
+        });
+        DebtCalculator.originalTotalAnnualInterest = totalAnnualInterest;
+        DOMUtils.setText('debt-total-principal', (totalPrincipal / 10000).toLocaleString());
+        DOMUtils.setText('debt-total-annual-interest', Math.round(totalAnnualInterest).toLocaleString());
+        const simAmountEl = DOMUtils.get('sim-loan-amount');
+        if (simAmountEl) simAmountEl.value = totalPrincipal;
+        DOMUtils.setText('sim-new-payment', 'NT$ 0');
+        DOMUtils.setText('sim-interest-savings', 'NT$ 0');
+        DOMUtils.toggleClass('debt-calculator-modal', 'hidden', false);
+    },
+    close: () => DOMUtils.toggleClass('debt-calculator-modal', 'hidden', true),
+    calculateSimulation: () => {
+        const P = parseFloat(DOMUtils.getValue('sim-loan-amount')) || 0;
+        const annualRate = parseFloat(DOMUtils.getValue('sim-interest-rate')) || 0;
+        const termYears = parseInt(DOMUtils.getValue('sim-loan-term')) || 0;
+        if (P <= 0 || annualRate <= 0 || termYears <= 0) { alert('請輸入有效的整合貸款金額、利率與還款年限。'); return; }
+        const r = (annualRate / 100) / 12, n = termYears * 12;
+        const monthlyPayment = P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+        const annualSavings = DebtCalculator.originalTotalAnnualInterest - (P * (annualRate / 100));
+        const formatter = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', minimumFractionDigits: 0 });
+        DOMUtils.setText('sim-new-payment', formatter.format(monthlyPayment));
+        DOMUtils.setText('sim-interest-savings', formatter.format(annualSavings));
+    }
+};
+
+const Accelerator = {
+    params: {},
+    originalMonths: Infinity,
+
+    open() {
+        const formData = FormGenerator.collectFormData();
+        
+        // 收集計算所需的所有數據
+        let totalDebtPayment = 0;
+        App.CONFIG.debtTypes.forEach(debt => {
+            if (formData[`has-${debt.id}`] && debt.fields.some(f => f.id === 'payment')) {
+                 totalDebtPayment += (formData[`${debt.id}-payment`] || 0);
+            }
+        });
+        
+        this.params = {
+            mainIncome: formData['main-income'],
+            otherIncome: formData['other-income'],
+            livingExpenses: formData['living-expenses'],
+            cashAssets: formData['cash-assets'],
+            stockAssets: formData['stock-assets'],
+            houseGoalPrice: formData['house-goal-price'],
+            totalDebtPayment: totalDebtPayment,
+        };
+        
+        // 1. 計算並渲染基準線
+        const totalIncome = this.params.mainIncome + this.params.otherIncome;
+        const currentSavings = totalIncome - this.params.livingExpenses - this.params.totalDebtPayment;
+        const currentAssets = (this.params.cashAssets + this.params.stockAssets) * 10000;
+        const downPaymentGoal = this.params.houseGoalPrice * 10000 * 0.2; // 簡化為2成
+        const downPaymentGap = Math.max(0, downPaymentGoal - currentAssets);
+        
+        this.originalMonths = currentSavings > 0 ? Math.ceil(downPaymentGap / currentSavings) : Infinity;
+
+        const formatter = (val) => `NT$ ${val.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+        DOMUtils.setText('accel-original-downpayment', formatter(downPaymentGap));
+        DOMUtils.setText('accel-original-savings', formatter(currentSavings));
+        DOMUtils.setText('accel-original-time', this.formatMonths(this.originalMonths));
+
+        // 2. 重設模擬器輸入值
+        DOMUtils.get('accel-target-income').value = totalIncome;
+        DOMUtils.get('accel-debt-cleared').checked = false;
+        DOMUtils.get('accel-price-reduction').value = 0;
+        
+        // 3. 執行一次更新並顯示
+        this.update();
+        DOMUtils.toggleClass('accelerator-modal', 'hidden', false);
+    },
+
+    close() {
+        DOMUtils.toggleClass('accelerator-modal', 'hidden', true);
+    },
+
+    update() {
+        // 讀取三大策略的輸入值
+        const targetIncome = parseFloat(DOMUtils.getValue('accel-target-income')) || (this.params.mainIncome + this.params.otherIncome);
+        const isDebtCleared = DOMUtils.isChecked('accel-debt-cleared');
+        const priceReduction = parseFloat(DOMUtils.getValue('accel-price-reduction')) || 0;
+
+        // 根據策略重新計算財務數據
+        const newDebtPayment = isDebtCleared ? 0 : this.params.totalDebtPayment;
+        const newMonthlySavings = targetIncome - this.params.livingExpenses - newDebtPayment;
+
+        const newGoalPrice = this.params.houseGoalPrice * (1 - (priceReduction / 100));
+        const newDownPaymentGoal = newGoalPrice * 10000 * 0.2;
+        const currentAssets = (this.params.cashAssets + this.params.stockAssets) * 10000;
+        const newDownPaymentGap = Math.max(0, newDownPaymentGoal - currentAssets);
+
+        const newMonths = newMonthlySavings > 0 ? Math.ceil(newDownPaymentGap / newMonthlySavings) : Infinity;
+        const monthsShortened = this.originalMonths - newMonths;
+        
+        // 更新結果顯示
+        const formatter = (val) => `NT$ ${val.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+        DOMUtils.setText('accel-new-savings', formatter(newMonthlySavings));
+        DOMUtils.setText('accel-new-time', this.formatMonths(newMonths));
+        DOMUtils.setText('accel-time-shortened', isFinite(monthsShortened) && monthsShortened > 0 ? this.formatMonths(monthsShortened) : '--');
+    },
+    
+    formatMonths(totalMonths) {
+        if (!isFinite(totalMonths) || totalMonths < 0) {
+            return '無法達成';
+        }
+        const years = Math.floor(totalMonths / 12);
+        const months = totalMonths % 12;
+        if (years > 0) {
+            return `${years}年 ${months}月`;
+        }
+        return `${months}月`;
+    }
+};
+</script>
