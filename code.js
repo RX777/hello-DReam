@@ -194,3 +194,4 @@ function determinePersona(financials, scores, data) {
     if (totalAssets < 1000000 && totalIncome < 50000) return 'PRECARIOUS_BEGINNER';
     return 'DEFAULT';
 }
+//// 每日工作流程測試 - 2025-08-04
